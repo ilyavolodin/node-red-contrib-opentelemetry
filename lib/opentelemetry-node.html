@@ -51,6 +51,10 @@ RED.nodes.registerType('OpenTelemetry', {
       value: 'http',
       required: true,
     },
+    authType: {
+      value: 'none',
+      required: true,
+    },
     rootPrefix: {
       value: 'Message ',
     },
@@ -90,10 +94,48 @@ RED.nodes.registerType('OpenTelemetry', {
       },
     },
   },
+  credentials: {
+    authValue: { type: 'password' },
+  },
   label: function () {
     return this.name || 'OpenTelemetry'
   },
   oneditprepare: function () {
+    function updateAuthFields (authType) {
+      const type = authType || 'none'
+      const row = $('#node-row-authValue')
+      const label = $('#node-label-authValue span')
+      const input = $('#node-input-authValue')
+      switch (type) {
+        case 'bearer':
+          row.show()
+          label.text('Token')
+          input.attr('placeholder', 'Bearer token')
+          break
+        case 'basic':
+          row.show()
+          label.text('Username:Password')
+          input.attr('placeholder', 'username:password')
+          break
+        case 'custom':
+          row.show()
+          label.text('Header value')
+          input.attr('placeholder', 'Authorization header value')
+          break
+        default:
+          row.hide()
+          input.attr('placeholder', '')
+          break
+      }
+    }
+
+    const currentAuthType = this.authType || 'none'
+    $('#node-input-authType').val(currentAuthType)
+    updateAuthFields(currentAuthType)
+    $('#node-input-authType').on('change', function () {
+      updateAuthFields(this.value)
+    })
+
     $('#node-input-otelAttributeMapping-container').css('min-height', '150px').css('min-width', '450px').editableList({
       addItem: function (container, i, opt) {
         if (!Object.prototype.hasOwnProperty.call(opt, 'attributeMapping')) {
@@ -152,6 +194,10 @@ RED.nodes.registerType('OpenTelemetry', {
       })
     })
     this.attributeMappings = attributeMappings.sort(sortAttributeMappings)
+    this.authType = $('#node-input-authType').val()
+    if (this.authType === 'none') {
+      $('#node-input-authValue').val('')
+    }
   },
 })
 </script>
@@ -172,6 +218,19 @@ RED.nodes.registerType('OpenTelemetry', {
       <option value="http">http/json</option>
       <option value="proto">http/protobuf</option>
     </select>
+  </div>
+  <div class="form-row" title="Authorization method used when calling the exporter">
+    <label for="node-input-authType"><i class="fa fa-lock"></i> Auth</label>
+    <select id="node-input-authType">
+      <option value="none">None</option>
+      <option value="bearer">Bearer token</option>
+      <option value="basic">Basic auth</option>
+      <option value="custom">Custom</option>
+    </select>
+  </div>
+  <div class="form-row" id="node-row-authValue" style="display:none;" title="Value injected in the Authorization header">
+    <label id="node-label-authValue" for="node-input-authValue"><i class="fa fa-key"></i> <span>Value</span></label>
+    <input type="password" id="node-input-authValue" placeholder="">
   </div>
   <div class="form-row" title="OpenTelemetry service name">
     <label for="node-input-serviceName"><i class="fa fa-server"></i> Service</label>
@@ -213,6 +272,7 @@ RED.nodes.registerType('OpenTelemetry', {
   <p>You must set:<ul>
     <li>the <code>url</code> of the exporter,</li>
     <li>the <code>service</code> name displayed in your visualization tool,</li>
+    <li>optional <code>authorization</code> method and credential when the collector requires it,</li>
     <li>optional <code>root prefix</code> that will be added to the root Node-RED span name before the initial node name,</li>
     <li>optional comma-separated list of <code>ignored</code> nodes that will not emit a trace,</li>
     <li>optional comma-separated list of node types that will <code>propagate</code> traces using request headers (W3C trace context propagation).</li>
